@@ -78,14 +78,14 @@ void servicePlayers(int client1, int client2, int client3, int client4) {
             printf("Read Error from Player 1");
         }
         c1_points += ntohl(c1_conv_points);
-        snprintf(buf, 100, "Your Score is :: %d \nOpponents Scores are :: %d, %d, %d\n\n", c1_points, c2_points, c3_points, c4_points);
+        snprintf(buf, 100, "Your Score is :: %d \nOpponents Scores \nPlayer 2 :: %d \nPlayer 3 :: %d \nPlayer 4 :: %d\n\n", c1_points, c2_points, c3_points, c4_points);
         write(client1, buf, 100);
         
         if (c1_points >= 100) {
             write(client1, "Game over: You won the game", 100);
-            write(client2, "Game over: You lost the game", 100);
-            write(client3, "Game over: You lost the game", 100);
-            write(client4, "Game over: You lost the game", 100);
+            write(client2, "Game over: You lost the game and Player 1 won the game", 100);
+            write(client3, "Game over: You lost the game and Player 1 won the game", 100);
+            write(client4, "Game over: You lost the game and Player 1 won the game", 100);
             break;
         }
         
@@ -95,14 +95,14 @@ void servicePlayers(int client1, int client2, int client3, int client4) {
             printf("Read Error from Player 2");
         }
         c2_points += ntohl(c2_conv_points);
-        snprintf(buf, 100, "Your Score is :: %d \nOpponents Scores are :: %d, %d, %d\n\n", c2_points, c1_points, c3_points, c4_points);
+        snprintf(buf, 100, "Your Score is :: %d \nOpponents Scores \nPlayer 1 :: %d \nPlayer 3 :: %d \nPlayer 4 :: %d\n\n", c2_points, c1_points, c3_points, c4_points);
         write(client2, buf, 100);
         
         if (c2_points >= 100) {
             write(client2, "Game over: You won the game", 100);
-            write(client1, "Game over: You lost the game", 100);
-            write(client3, "Game over: You lost the game", 100);
-            write(client4, "Game over: You lost the game", 100);
+            write(client1, "Game over: You lost the game and Player 2 won the game", 100);
+            write(client3, "Game over: You lost the game and Player 2 won the game", 100);
+            write(client4, "Game over: You lost the game and Player 2 won the game", 100);
             break;
         }
         
@@ -112,14 +112,14 @@ void servicePlayers(int client1, int client2, int client3, int client4) {
             printf("Read Error from Player 3");
         }
         c3_points += ntohl(c3_conv_points);
-        snprintf(buf, 100, "Your Score is :: %d \nOpponents Scores are :: %d, %d, %d\n\n", c3_points, c1_points, c2_points, c4_points);
+        snprintf(buf, 100, "Your Score is :: %d \nOpponents Scores \nPlayer 1 :: %d \nPlayer 2 :: %d \nPlayer 4 :: %d\n\n", c3_points, c1_points, c2_points, c4_points);
         write(client3, buf, 100);
         
         if (c3_points >= 100) {
             write(client3, "Game over: You won the game", 100);
-            write(client1, "Game over: You lost the game", 100);
-            write(client2, "Game over: You lost the game", 100);
-            write(client4, "Game over: You lost the game", 100);
+            write(client1, "Game over: You lost the game and Player 3 won the game", 100);
+            write(client2, "Game over: You lost the game and Player 3 won the game", 100);
+            write(client4, "Game over: You lost the game and Player 3 won the game", 100);
             break;
         }
         
@@ -129,14 +129,14 @@ void servicePlayers(int client1, int client2, int client3, int client4) {
 			printf("Read Error from Player 4");
 		}
 		c4_points += ntohl(c4_conv_points);
-		snprintf(buf, 100, "Your Score is :: %d \nOpponents Scores are :: %d, %d, %d\n\n", c4_points, c1_points, c2_points, c3_points);
+		snprintf(buf, 100, "Your Score is :: %d \nOpponents Scores \nPlayer 1 :: %d \nPlayer 2 :: %d \nPlayer 3 :: %d\n\n", c4_points, c1_points, c2_points, c3_points);
 		write(client4, buf, 100);
 
 		if (c4_points >= 100) {
 			write(client4, "Game over: You won the game", 100);
-			write(client1, "Game over: You lost the game", 100);
-			write(client2, "Game over: You lost the game", 100);
-			write(client3, "Game over: You lost the game", 100);
+			write(client1, "Game over: You lost the game and Player 4 won the game", 100);
+			write(client2, "Game over: You lost the game and Player 4 won the game", 100);
+			write(client3, "Game over: You lost the game and Player 4 won the game", 100);
 			break;
 		}
 	}
