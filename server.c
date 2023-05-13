@@ -44,18 +44,18 @@ int main(int argc, char *argv[]) {
     
     while (1) {
         client1 = accept(sd, (struct sockaddr*)NULL, NULL);
-        write(client1, "Waiting for player 2 to join ...", 100);
+        write(client1, "Waiting for other players to join ...", 100);
         client2 = accept(sd, (struct sockaddr*)NULL, NULL);
-        write(client1, "Player 2 joined ... Waiting for player 3 to join ...", 100);
-        write(client2, "Player 1 already joined ... Waiting for player 4 to join ...", 100);
+        write(client1, "Player 2 joined ... Waiting for Player 3 and Player 4 to join ...", 100);
+        write(client2, "Player 1 already joined ... Waiting for Player 3 and Player 4 to join ...", 100);
         client3 = accept(sd, (struct sockaddr*)NULL, NULL);
-        write(client1, "Player 3 joined ... Game is Starting ...", 100);
-        write(client2, "Player 3 already joined ... Game is Starting ...", 100);
-        write(client3, "You are player 3 ... Waiting for player 4 to join ...", 100);
+        write(client1, "Player 3 joined ... Waiting for Player 4 to join ...", 100);
+        write(client2, "Player 3 joined ... Waiting for Player 4 to join ...", 100);
+        write(client3, "You are Player 3 ... Waiting for Player 4 to join ...", 100);
         client4 = accept(sd, (struct sockaddr*)NULL, NULL);
-        write(client1, "Player 4 joined ... Game is Starting ...", 100);
+        write(client1, "Player 4 already joined ... Game is Starting ...", 100);
         write(client2, "Player 4 already joined ... Game is Starting ...", 100);
-        write(client3, "Player 4 joined ... Game is Starting ...", 100);
+        write(client3, "Player 4 already joined ... Game is Starting ...", 100);
         write(client4, "You are player 4 ... Game is Starting ...", 100);
         
         printf("[+] Got a game request\n");
