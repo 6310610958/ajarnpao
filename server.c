@@ -17,8 +17,14 @@ const int BUFFER_SIZE = 1024;
 int server;
 int players[MAX_CLIENT];
 int connected_player;
-int incoming_score;
+int incoming_score[MAX_CLIENT];
+int sent_score;
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+
+typedef struct {
+    int id;
+    int socket;
+} Client;
 
 int main(int argc, char *argv[]) {
     pthread_mutex_init(&lock, NULL);
@@ -68,77 +74,100 @@ int main(int argc, char *argv[]) {
 
 void *handleClient(void *server_fd) {
     int client;
+    pthread_t thread[MAX_CLIENT];
     int server = *((int *)server_fd);
-    printf("\n[+] Server ready!\n");
+    printf("[+] Server ready!\n");
 
     while (1) {
-        client = accept(server, (struct sockaddr *) NULL, NULL);
-        char waiting_char[1000];
-        sprintf(waiting_char, "Waiting for players (%d/%d)", connected_player, MAX_CLIENT);
+        struct sockaddr_in address;
+        int addrlen = sizeof(address);
+        client = accept(server, (struct sockaddr *)&address, (socklen_t *)&addrlen);
 
-        if(connected_player > MAX_CLIENT) {
-            write(client, "Server is full", 100);
-            close(client);
-            continue;
-        }
+        int id = connected_player;
+
+        printf("[+] Client #%d connected.\n", id + 1);
+
+        char waiting_char[BUFFER_SIZE];
+        sprintf(waiting_char, "Waiting for players (%d/%d)", connected_player + 1, MAX_CLIENT);
+        
         pthread_mutex_lock(&lock);
+        players[id] = client;
         connected_player++;
         pthread_mutex_unlock(&lock);
         write(client, waiting_char, sizeof(waiting_char));
 
-        pthread_t thread[MAX_CLIENT];
-        pthread_create(&thread[connected_player - 1], NULL, &receiver, (void *) &server);
+        if(connected_player == MAX_CLIENT) {
+            printf("[+] Sending READY to all clients\n");
+            for (int i = 0; i < MAX_CLIENT; i++) write(players[i], "READY", 6);
+        }
 
-        for (int i = 0; i < MAX_CLIENT; i++) {
-            if (pthread_join(thread[i], NULL) != 0) {
-                fprintf(stderr, "\nFailed to join socket thread #%d\n", i);
-                return (void*)1;
-            }
+        
+        Client client_info;
+        client_info.id = id;
+        client_info.socket = client;
+
+        pthread_create(&thread[connected_player - 1], NULL, &receiver, (void *) &client_info);
+
+        if(connected_player == MAX_CLIENT) break;
+    }
+
+    for (int i = 0; i < MAX_CLIENT; i++) {
+        if (pthread_join(thread[i], NULL) != 0) {
+            fprintf(stderr, "\nFailed to join socket thread #%d\n", i);
+            return (void*)1;
         }
     }
 
+    pthread_exit(NULL);
+    return 0;
 }
 
-void *receiver(void *local) {
-    int local_fd = *((int *)local);
-    struct sockaddr_in address;
-    char buffer[BUFFER_SIZE];
-    int valread;
-    int addrlen = sizeof(address);
-    fd_set current_sockets, ready_sockets;
-
-    int k = 0;
-
-    while (1) {
-        k++;
-
-        ready_sockets = current_sockets;
-
-        int client_socket;
-
-        if ((client_socket = accept(local_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0) {
-            perror("Accept");
-            exit(EXIT_FAILURE);
-        }
-        
-        printf("[+] Client #%d connected.\n", k);
-        pthread_mutex_lock(&lock);
-        players[k] = client_socket;
-        connected_player++;
-        pthread_mutex_unlock(&lock);
+void *receiver(void *info) {
+    Client client_info = *((Client *)info);
     
-        unsigned char data[BUFFER_SIZE];
-        memcpy(data, buffer, BUFFER_SIZE);
-        valread = recv(k, data, BUFFER_SIZE, 0);
-        if(valread == 0) {
-            printf("[-] Client #%d disconnected.\n", k);
-            players[k] = 0;
-            connected_player--;
-            continue;
+    char buffer[BUFFER_SIZE];
+    while (1) {
+        bzero(buffer, BUFFER_SIZE);
+
+        int n = read(client_info.socket, buffer, BUFFER_SIZE);
+
+        if (n < 0){
+            perror("[-] ERROR");
+            exit(1);
         }
-        if(valread > 0) {
-            printf("[+] Client #%d received -> %s\n", k, buffer);
-        }
+        if(n == 0) break;
+
+        printf("[+] Client #%d said (%d): %s \n", client_info.id + 1, n, buffer);
+
+        int number = atoi(buffer);
+        int random_number = rand() + number % 6;
+        pthread_mutex_lock(&lock);
+        sent_score++;
+        incoming_score[client_info.id] = random_number;
+        pthread_mutex_unlock(&lock);
+
+        if(sent_score >= MAX_CLIENT) {
+            int max = 0;
+            int id = 0;
+
+            // find the max score
+            for (int i = 0; i < MAX_CLIENT; i++) {
+                if(incoming_score[client_info.id] > max) {
+                    max = incoming_score[client_info.id];
+                    id = i;
+                }
+            }
+            for (int i = 0; i < MAX_CLIENT; i++) {
+                if(i == id) {
+                    write(players[i], "WIN", 3);
+                    continue;
+                };
+                write(players[i], "LOSE", 4);
+            }
+        };
+
+        // escape this loop, if the client sends message "quit"
+        if (!bcmp(buffer, "quit", 4)) break;
     }
 
     pthread_exit(NULL);

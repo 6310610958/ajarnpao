@@ -12,6 +12,17 @@
 
 void *handleServer(void *arg);
 
+// Ref: https://stackoverflow.com/a/26589552
+int ReadUntilEOL(void) {
+    char ch;
+    int count;
+    while ((count = scanf("%c", &ch)) == 1 && ch != '\n')
+    ; // Consume char until \n or EOF or IO error
+    return count;
+}
+
+int BUFFER_SIZE = 1024;
+int ready_to_play = 0;
 int main(int argc, const char *argv[])
 {
     char message[100];
@@ -63,33 +74,63 @@ int main(int argc, const char *argv[])
         fprintf(stderr, "\nFailed to join socket thread\n");
         return 1;
     }
-
-    // while (1)
-    // {
-    //     if (read(server, message, sizeof(message)) < 0)
-    //     {
-    //         fprintf(stderr, "read() error\n");
-    //         exit(0);
-    //     }
-    //     printf("%s\n", message);
-
-    //     if (!strcmp(message, "You can now play"))
-    //     {
-    //         int l;
-    //         fscanf(stdin, "%d", &l);
-    //         dice = rand() + l % 6 + 1;
-    //         printf("********** You got: %d **********\n", dice);
-    //         point = htonl(dice);
-    //         write(server, &point, size);
-    //     }
-    // }
     exit(0);
+}
+
+int read_int() {
+    int n;
+    for (;;) {
+        printf("Enter an integer: ");
+        char NextChar = '\n';
+        int count = scanf("%d%c", &n, &NextChar);
+        if (count >= 1 && NextChar == '\n') 
+            break;
+        if (ReadUntilEOL() == EOF) 
+            return 1;  // No valid input ever found
+    }
+    return n;
 }
 
 void *handleServer(void* args) {
     int server = *(int*)args;
+    int n = 0;
+    char buffer[BUFFER_SIZE];
 
     while(1) {
+        bzero(buffer, BUFFER_SIZE);
+        n = read(server, buffer, BUFFER_SIZE);
 
+        if (n < 0){
+            perror("[-] ERROR");
+            exit(1);
+        }
+
+        if(n == 0) break;
+        if(strcmp(buffer, "READY") == 0) {
+            int number = read_int();
+            
+            char str[BUFFER_SIZE];
+            sprintf(str, "%d", number);
+
+            write(server, &str, sizeof(str));
+            printf("[+] Sent nonce: %d\n", number);
+        } else if (strcmp(buffer, "WIN") == 0) {
+            printf("[+] You win!\n");
+            break;
+        } else if (strcmp(buffer, "LOSE") == 0) {
+            printf("[+] You lose!\n");
+            break;
+        } else {
+           printf("[+] Server replied: %s \n", buffer); 
+        }
+
+        // escape this loop, if the server sends message "quit"
+        if (!bcmp(buffer, "quit", 4))
+            break;
+        // if server send ready signal, then we can start playing
+        ready_to_play++;
     }
+
+    pthread_exit(NULL);
+    return 0;
 }
