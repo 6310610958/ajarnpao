@@ -47,10 +47,14 @@ int main(int argc, char *argv[]) {
     servAdd.sin_addr.s_addr = htonl(INADDR_ANY);
     sscanf(argv[1], "%d", &portNumber);
     servAdd.sin_port = htons((uint16_t) portNumber);
-    bind(server, (struct sockaddr *) &servAdd, sizeof(servAdd));
+    if (bind(server, (struct sockaddr *) &servAdd, sizeof(servAdd)) < 0)
+    {
+        printf("[-] Bind failed");
+        return (EXIT_FAILURE);
+    }
 
     if (listen(server, 6) < 0) {
-        printf("[-] Error in binding.\n");
+        printf("[-] Listen failed.\n");
         return (EXIT_FAILURE);
     }
 
@@ -145,11 +149,13 @@ void *receiver(void *info) {
         sent_score++;
         incoming_score[client_info.id] = random_number;
         pthread_mutex_unlock(&lock);
+        printf("[+] Client #%d score: %d\n", client_info.id + 1, random_number);
 
         if(sent_score >= MAX_CLIENT) {
             int max = 0;
             int id = 0;
 
+            printf("[+] Sending result to all clients\n");
             // find the max score
             for (int i = 0; i < MAX_CLIENT; i++) {
                 if(incoming_score[client_info.id] > max) {

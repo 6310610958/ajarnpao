@@ -113,7 +113,7 @@ void *handleServer(void* args) {
             sprintf(str, "%d", number);
 
             write(server, &str, sizeof(str));
-            printf("[+] Sent nonce: %d\n", number);
+            printf("[+] Sent number: %d\n", number);
         } else if (strcmp(buffer, "WIN") == 0) {
             printf("[+] You win!\n");
             break;
