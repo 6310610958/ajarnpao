@@ -3,24 +3,27 @@
 #include <sys/socket.h>
 #include <time.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <pthread.h>
 
-void *handlePlayer(void *arg);
+void *receiver(void *arg);
+void *handleClient(void *server_fd);
 
-struct PlayerData {
-    int client;
-    int* ownScorePtr;
-    int* opponentScorePtr;
-    pthread_mutex_t* scoreMutexPtr;
-    int* gameEndPtr;
-    int* wonGamePtr;
-};
+const int MAX_CLIENT = 2;
+const int BUFFER_SIZE = 1024;
+int server;
+int players[MAX_CLIENT];
+int connected_player;
+int incoming_score;
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
 int main(int argc, char *argv[]) {
-    int sd, client1, client2, portNumber;
+    pthread_mutex_init(&lock, NULL);
+
+    int portNumber;
     socklen_t len;
     struct sockaddr_in servAdd;
 
@@ -28,7 +31,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Call model: %s <Port#>\n", argv[0]);
         exit(0);
     }
-    if ((sd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+    if ((server = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         fprintf(stderr, "[-] Could not create socket\n");
         exit(1);
     } else {
@@ -38,102 +41,103 @@ int main(int argc, char *argv[]) {
     servAdd.sin_addr.s_addr = htonl(INADDR_ANY);
     sscanf(argv[1], "%d", &portNumber);
     servAdd.sin_port = htons((uint16_t) portNumber);
-    bind(sd, (struct sockaddr *) &servAdd, sizeof(servAdd));
+    bind(server, (struct sockaddr *) &servAdd, sizeof(servAdd));
 
-    if (listen(sd, 6) == 0) {
-        printf("[+] Listening...\n");
-    } else {
+    if (listen(server, 6) < 0) {
         printf("[-] Error in binding.\n");
+        return (EXIT_FAILURE);
     }
 
     pthread_mutex_t score_mutex;
     pthread_mutex_init(&score_mutex, NULL);
 
-    while (1) {
-        client1 = accept(sd, (struct sockaddr *) NULL, NULL);
-        write(client1, "Waiting for player 2 to join ...", 100);
-        client2 = accept(sd, (struct sockaddr *) NULL, NULL);
-        write(client1, "Player 2 joined ... Game is Starting ...", 100);
-        write(client2, "Player 1 already joined ... Game is Starting ...", 100);
-        printf("[+] Got a game request\n");
+    pthread_t receiver;
+    if(pthread_create(&receiver, NULL, &handleClient, &server) != 0) {
+        fprintf(stderr, "\nFailed to create mining thread\n");
+        return (EXIT_FAILURE);
+    };
 
-        int player1Score = 0;
-        int player2Score = 0;
-        int gameEnd = 0;
-        int player1Won = 0;
-        int player2Won = 0;
-
-        struct PlayerData player1Data = {client1, &player1Score, &player2Score, &score_mutex, &gameEnd, &player1Won};
-        struct PlayerData player2Data = {client2, &player2Score, &player1Score, &score_mutex, &gameEnd, &player2Won};
-
-        pthread_t thread1, thread2;
-        pthread_create(&thread1, NULL, handlePlayer, (void *) &player1Data);
-        pthread_create(&thread2, NULL, handlePlayer, (void *) &player2Data);
-
-        pthread_join(thread1, NULL);
-        pthread_join(thread2, NULL);
-
-        // Check if either player has won
-        if (player1Won) {
-            write(client2, "Game over: Opponent won the game", 100);
-        } else if (player2Won) {
-            write(client1, "Game over: Opponent won the game", 100);
-        }
-
-        close(client1);
-        close(client2);
+    if (pthread_join(receiver, NULL) != 0) {
+        fprintf(stderr, "\nFailed to join socket thread\n");
+        return 1;
     }
-
+    
     pthread_mutex_destroy(&score_mutex);
     return 0;
 }
 
-void *handlePlayer(void *arg) {
-    struct PlayerData* playerData = (struct PlayerData*) arg;
-    int client = playerData->client;
-    int* ownScorePtr = playerData->ownScorePtr;
-    int* opponentScorePtr = playerData->opponentScorePtr;
-    pthread_mutex_t* scoreMutexPtr = playerData->scoreMutexPtr;
-    int* gameEndPtr = playerData->gameEndPtr;
-    int* wonGamePtr = playerData->wonGamePtr;
-
-    char buf[100];
-    int32_t conv_points;
-    int size = sizeof(conv_points);
+void *handleClient(void *server_fd) {
+    int client;
+    int server = *((int *)server_fd);
+    printf("\n[+] Server ready!\n");
 
     while (1) {
-        sleep(1);
-        write(client, "You can now play", 100);
-        if (read(client, &conv_points, size) < 0) {
-            printf("Read Error from Player\n");
-            break;
+        client = accept(server, (struct sockaddr *) NULL, NULL);
+        char waiting_char[1000];
+        sprintf(waiting_char, "Waiting for players (%d/%d)", connected_player, MAX_CLIENT);
+
+        if(connected_player > MAX_CLIENT) {
+            write(client, "Server is full", 100);
+            close(client);
+            continue;
         }
+        pthread_mutex_lock(&lock);
+        connected_player++;
+        pthread_mutex_unlock(&lock);
+        write(client, waiting_char, sizeof(waiting_char));
 
-        int points = ntohl(conv_points);
-        pthread_mutex_lock(scoreMutexPtr);
-        *ownScorePtr += points;
-        snprintf(buf, 100, "Your Score is :: %d\nOpponent's Score is :: %d\n", *ownScorePtr, *opponentScorePtr);
-        write(client, buf, 100);
+        pthread_t thread[MAX_CLIENT];
+        pthread_create(&thread[connected_player - 1], NULL, &receiver, (void *) &server);
 
-        if (*ownScorePtr >= 100) {
-            if (!*wonGamePtr) {
-                *wonGamePtr = 1;
-                *gameEndPtr = 1;
-                write(client, "Game over: You won the game", 100);
-                break;
+        for (int i = 0; i < MAX_CLIENT; i++) {
+            if (pthread_join(thread[i], NULL) != 0) {
+                fprintf(stderr, "\nFailed to join socket thread #%d\n", i);
+                return (void*)1;
             }
-        } else if (*opponentScorePtr >= 100) {
-            if (!*wonGamePtr) {
-                *wonGamePtr = 1;
-                *gameEndPtr = 1;
-                break;
-            }
+        }
+    }
+
+}
+
+void *receiver(void *local) {
+    int local_fd = *((int *)local);
+    struct sockaddr_in address;
+    char buffer[BUFFER_SIZE];
+    int valread;
+    int addrlen = sizeof(address);
+    fd_set current_sockets, ready_sockets;
+
+    int k = 0;
+
+    while (1) {
+        k++;
+
+        ready_sockets = current_sockets;
+
+        int client_socket;
+
+        if ((client_socket = accept(local_fd, (struct sockaddr *)&address, (socklen_t *)&addrlen)) < 0) {
+            perror("Accept");
+            exit(EXIT_FAILURE);
         }
         
-        pthread_mutex_unlock(scoreMutexPtr);
-
-        if (*gameEndPtr) {
-            break; // Exit the loop if the game has ended
+        printf("[+] Client #%d connected.\n", k);
+        pthread_mutex_lock(&lock);
+        players[k] = client_socket;
+        connected_player++;
+        pthread_mutex_unlock(&lock);
+    
+        unsigned char data[BUFFER_SIZE];
+        memcpy(data, buffer, BUFFER_SIZE);
+        valread = recv(k, data, BUFFER_SIZE, 0);
+        if(valread == 0) {
+            printf("[-] Client #%d disconnected.\n", k);
+            players[k] = 0;
+            connected_player--;
+            continue;
+        }
+        if(valread > 0) {
+            printf("[+] Client #%d received -> %s\n", k, buffer);
         }
     }
 
